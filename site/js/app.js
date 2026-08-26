@@ -158,7 +158,7 @@ function drawThemesTable(themes, etfs) {
     const av = a[sortKey], bv = b[sortKey];
     if (av === null || av === undefined) return 1;
     if (bv === null || bv === undefined) return -1;
-    return (av < bv ? -1 : av > bv ? 1 : 0) * -sortDir;
+    return (av < bv ? -1 : av > bv ? 1 : 0) * sortDir;
   });
 
   $('#tbl-title').textContent = title;

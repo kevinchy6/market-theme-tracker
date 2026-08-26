@@ -2,6 +2,17 @@
 
 import os
 
+# yfinance + curl_cffi open many sockets/files under threading; the default
+# soft limit (1024) gets exhausted mid-run and surfaces as sqlite
+# "unable to open database file" errors. Raise it as high as allowed.
+try:
+    import resource
+
+    _soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (min(65536, _hard), _hard))
+except Exception:  # noqa: BLE001
+    pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(ROOT, "data_cache")
 DATA_DIR = os.path.join(ROOT, "site", "data")

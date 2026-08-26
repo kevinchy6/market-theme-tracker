@@ -59,6 +59,10 @@ def download_all(tickers, period=HISTORY_PERIOD, chunk=50, rounds=5, pause=2.0):
             time.sleep(pause)
         if not failed:
             break
+        if len(failed) == len(remaining):
+            # no progress this round: likely delisted symbols, stop retrying
+            print(f"  round {rnd_i}: no progress, giving up on {len(failed)} symbols", flush=True)
+            break
         wait_s = 90 * (rnd_i + 1)
         print(f"  round {rnd_i} done, {len(failed)} missing; sleeping {wait_s}s", flush=True)
         remaining = failed

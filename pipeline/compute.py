@@ -329,6 +329,10 @@ def main():
     with open(os.path.join(CACHE_DIR, "universe.json")) as f:
         universe = json.load(f)
     df = pd.read_parquet(PRICES_PATH)
+    # drop bars with almost no coverage (e.g. Yahoo emits an empty "today"
+    # row before the US session has any prints)
+    coverage = df["Close"].notna().mean(axis=1)
+    df = df[coverage > 0.1]
     close, opn, volume = df["Close"], df["Open"], df["Volume"]
     print(f"prices: {close.shape}")
 
