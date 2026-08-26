@@ -1,0 +1,86 @@
+name: Daily close update
+
+on:
+  schedule:
+    - cron: "30 21 * * 1-5" # after US close
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "data_cache/earnings_cache.json"
+      - "data_cache/news.json"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore price cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data_cache/prices.parquet
+          key: prices-${{ github.run_id }}
+          restore-keys: prices-
+
+      - name: Update prices (incremental)
+        run: python -m pipeline.prices auto
+        continue-on-error: true
+
+      - name: Compute dashboards
+        run: python -m pipeline.compute
+        continue-on-error: true
+
+      - name: Refresh earnings (this week's reporters)
+        run: python -m pipeline.earnings daily
+        continue-on-error: true
+
+      - name: Fetch news for movers
+        run: python -m pipeline.news
+        continue-on-error: true
+
+      - name: Refresh COT
+        run: python -m pipeline.cot
+        continue-on-error: true
+
+      - name: Rebuild deep-dive files with news
+        run: python -m pipeline.compute
+        continue-on-error: true
+
+      - name: Save price cache
+        uses: actions/cache/save@v4
+        with:
+          path: data_cache/prices.parquet
+          key: prices-${{ github.run_id }}
+
+      - name: Commit small caches
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_cache/earnings_cache.json data_cache/news.json || true
+          git diff --cached --quiet || git commit -m "chore: refresh earnings/news caches [skip ci]"
+          git push || true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - uses: actions/deploy-pages@v4

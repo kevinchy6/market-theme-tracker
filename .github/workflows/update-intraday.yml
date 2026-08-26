@@ -1,0 +1,57 @@
+name: Intraday update
+
+on:
+  schedule:
+    # hourly during US regular session (13:30–20:00 UTC in summer, 14:30–21:00 in winter)
+    - cron: "45 13,14,15,16,17,18,19,20 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore price cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data_cache/prices.parquet
+          key: prices-${{ github.run_id }}
+          restore-keys: prices-
+
+      - name: Update prices (incremental)
+        run: python -m pipeline.prices auto
+        continue-on-error: true
+
+      - name: Compute dashboards
+        run: python -m pipeline.compute
+        continue-on-error: true
+
+      - name: Save price cache
+        uses: actions/cache/save@v4
+        with:
+          path: data_cache/prices.parquet
+          key: prices-${{ github.run_id }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - uses: actions/deploy-pages@v4
