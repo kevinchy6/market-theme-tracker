@@ -61,7 +61,19 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
   initSearch();
   try {
     const [meta, tape] = await Promise.all([getJSON('meta.json'), getJSON('tape.json')]);
-    $('#updated').textContent = `updated ${meta.updated} · bar ${meta.last_bar}`;
+    // Convert "YYYY-MM-DD HH:MM UTC" -> Hong Kong local time (UTC+8, no DST).
+    const hkUpdated = (() => {
+      const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}) UTC$/.exec(meta.updated || '');
+      if (!m) return meta.updated;
+      const d = new Date(`${m[1]}T${m[2]}:${m[3]}:00Z`);
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Hong_Kong',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).formatToParts(d).reduce((o, p) => (o[p.type] = p.value, o), {});
+      return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} HKT`;
+    })();
+    $('#updated').textContent = `updated ${hkUpdated} · bar ${meta.last_bar}`;
     renderTape(tape);
   } catch (e) { /* first run before data exists */ }
   render();
