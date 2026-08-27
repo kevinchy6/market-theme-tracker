@@ -19,7 +19,7 @@ def load_universe():
         return json.load(f)
 
 
-def download_all(tickers, period=HISTORY_PERIOD, chunk=50, rounds=5, pause=2.0):
+def download_all(tickers, period=HISTORY_PERIOD, chunk=50, rounds=5, pause=2.0, min_rows=20):
     """Rate-limit-friendly bulk download with resume: small sequential chunks,
     exponential backoff between rounds, retrying only missing tickers."""
     frames = {}
@@ -48,7 +48,7 @@ def download_all(tickers, period=HISTORY_PERIOD, chunk=50, rounds=5, pause=2.0):
                         sub = df[t].dropna(how="all")
                     except KeyError:
                         sub = None
-                    if sub is not None and len(sub) > 20:
+                    if sub is not None and len(sub) >= min_rows:
                         frames[t] = sub
                         got += 1
                     else:
@@ -91,11 +91,17 @@ def main(mode="auto"):
 
     if old is not None:
         print(f"incremental update ({len(tickers)} tickers, 7d)")
-        new = download_all(tickers, period="7d", chunk=50, rounds=4, pause=1.0)
-        cutoff = new.index.min()
-        merged = pd.concat([old[old.index < cutoff], new])
-        # keep only tickers we asked for, sorted columns
-        df = merged.sort_index()
+        try:
+            new = download_all(
+                tickers, period="7d", chunk=50, rounds=4, pause=1.0, min_rows=1
+            )
+        except RuntimeError as e:
+            print(f"incremental failed ({e}); keeping existing prices unchanged")
+            df = old
+        else:
+            cutoff = new.index.min()
+            merged = pd.concat([old[old.index < cutoff], new])
+            df = merged.sort_index()
     else:
         print(f"full download ({len(tickers)} tickers, {HISTORY_PERIOD} daily)")
         df = download_all(tickers)

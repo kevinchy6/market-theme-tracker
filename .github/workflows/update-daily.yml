@@ -2,7 +2,10 @@ name: Daily close update
 
 on:
   schedule:
-    - cron: "30 21 * * 1-5" # after US close
+    # ~2h after US regular-session close (16:00 ET). Two attempts in case
+    # the first misses fresh closing prints or hits Yahoo rate limits.
+    - cron: "30 22 * * 1-5"
+    - cron: "30 2 * * 2-6"
   workflow_dispatch:
   push:
     branches: [main]
