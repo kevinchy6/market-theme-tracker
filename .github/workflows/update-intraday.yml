@@ -2,8 +2,11 @@ name: Intraday update
 
 on:
   schedule:
-    # hourly during US regular session (13:30–20:00 UTC in summer, 14:30–21:00 in winter)
-    - cron: "45 13,14,15,16,17,18,19,20 * * 1-5"
+    # GitHub free-tier scheduled runs get heavily delayed / dropped
+    # (up to 60+ min under high load, often skipped entirely). Fire
+    # every 15 min during the US session to guarantee at least one
+    # run per hour lands. The concurrency group below prevents overlap.
+    - cron: "*/15 13-21 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -14,6 +17,9 @@ permissions:
 concurrency:
   group: pages-deploy
   cancel-in-progress: false
+
+# also prevent two intraday runs from stacking up on Yahoo at once
+# (they don't add value and just burn rate limit)
 
 jobs:
   update:
