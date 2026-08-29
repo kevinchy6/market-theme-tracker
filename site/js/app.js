@@ -252,7 +252,10 @@ async function renderSpotlight() {
 
   const chip = (r) => {
     const n = r.n ?? '';
-    return `<span class="hl-chip" data-ticker="${esc(r.t)}" title="${esc(r.name)} · ${fmtPct(r.chg)}">` +
+    const chgStr = (r.chg == null || Number.isNaN(r.chg))
+      ? '' : `${r.chg > 0 ? '+' : ''}${r.chg.toFixed(2)}%`;
+    const tip = esc(`${r.name} · ${chgStr}`);
+    return `<span class="hl-chip" data-ticker="${esc(r.t)}" title="${tip}">` +
       `<span class="hl-t">${esc(r.t)}</span>` +
       (n !== '' ? `<span class="hl-n">${n}</span>` : '') +
       `</span>`;
