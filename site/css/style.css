@@ -367,3 +367,46 @@ footer a { color: var(--text-dim); }
   .search-wrap input { width: 150px; }
   .updated { display: none; }
 }
+
+/* ---------- highs & lows ---------- */
+.hl-summary-card { padding: 16px 18px; }
+.hl-summary-nums { font-size: 15px; font-weight: 500; margin-bottom: 10px; }
+.hl-summary-nums .dim { font-weight: 400; font-size: 13px; }
+.hl-bar {
+  height: 10px; border-radius: 6px; overflow: hidden;
+  background: var(--surface-2); display: flex;
+}
+.hl-bar-h { background: var(--pos); transition: width .4s ease; }
+.hl-bar-l { background: var(--neg); transition: width .4s ease; }
+
+.hl-tabs { display: flex; gap: 8px; margin-top: 12px; }
+.hl-tab {
+  background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 14px; font-size: 12.5px; font-weight: 500;
+  cursor: pointer; transition: all .15s;
+}
+.hl-tab:hover { color: var(--text); border-color: var(--text-dim); }
+.hl-tab.active { background: var(--surface-2); color: var(--text); border-color: var(--accent); }
+
+.hl-group { padding: 14px 18px; border-top: 1px solid var(--border); }
+.hl-group:first-of-type { border-top: none; }
+.hl-group-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 10px;
+}
+.hl-group-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.hl-group-hits { font-size: 11.5px; color: var(--text-faint); font-family: var(--font-mono); }
+.hl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hl-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 9px 5px 10px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 6px; font-size: 12px;
+  transition: all .12s;
+}
+.hl-chip:hover {
+  background: var(--surface-3, #1e2733); border-color: var(--accent);
+}
+.hl-chip .hl-t { color: var(--text); font-weight: 600; font-family: var(--font-mono); letter-spacing: .3px; }
+.hl-chip .hl-n { color: var(--text-faint); font-size: 11px; font-family: var(--font-mono); }

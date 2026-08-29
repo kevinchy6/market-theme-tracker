@@ -244,28 +244,81 @@ def spotlight(universe, close, volume):
     cols = [t for t in close.columns if t in info]
     c = close[cols].ffill()
     pct = (c.iloc[-1] / c.iloc[-2] - 1) * 100
-    hi52 = c.rolling(252, min_periods=60).max().iloc[-1]
-    lo52 = c.rolling(252, min_periods=60).min().iloc[-1]
+    roll_hi = c.rolling(252, min_periods=60).max()
+    roll_lo = c.rolling(252, min_periods=60).min()
+    hi52 = roll_hi.iloc[-1]
+    lo52 = roll_lo.iloc[-1]
     last = c.iloc[-1]
 
-    def row(t):
-        return {
+    # "Hit count" over the last 63 sessions (~3 months): how many days the
+    # stock closed at a new 52w high / low within that window. Matches the
+    # persistence metric on Market Pulse's Highs/Lows page.
+    lookback = min(63, len(c))
+    window = c.tail(lookback)
+    hi_hits = (window >= roll_hi.tail(lookback)).sum(axis=0).astype(int)
+    lo_hits = (window <= roll_lo.tail(lookback)).sum(axis=0).astype(int)
+
+    def row(t, count=None):
+        r = {
             "t": t, "name": info[t]["name"][:32], "px": rnd(last[t]),
             "chg": rnd(pct.get(t)), "ind": info[t].get("industry", ""),
             "mcap": info[t].get("mcap") or 0,
         }
+        if count is not None:
+            r["n"] = int(count)
+        return r
 
-    highs = [row(t) for t in cols if last[t] >= hi52[t] and not pd.isna(pct.get(t))]
-    lows = [row(t) for t in cols if last[t] <= lo52[t] and not pd.isna(pct.get(t))]
-    highs.sort(key=lambda r: -(r["chg"] or 0))
-    lows.sort(key=lambda r: r["chg"] or 0)
+    highs = [
+        row(t, hi_hits.get(t, 0)) for t in cols
+        if last[t] >= hi52[t] and not pd.isna(pct.get(t))
+    ]
+    lows = [
+        row(t, lo_hits.get(t, 0)) for t in cols
+        if last[t] <= lo52[t] and not pd.isna(pct.get(t))
+    ]
+    # Sort each list by hit count desc (most persistent first),
+    # then by chg for tie-breaking.
+    highs.sort(key=lambda r: (-r.get("n", 0), -(r["chg"] or 0)))
+    lows.sort(key=lambda r: (-r.get("n", 0), r["chg"] or 0))
 
+    def group_by_industry(items):
+        """Return list of {industry, total_hits, items} sorted by total hits desc.
+        Items missing an industry go into an 'Ungrouped' bucket."""
+        buckets = {}
+        for r in items:
+            key = r.get("ind") or "Ungrouped"
+            buckets.setdefault(key, []).append(r)
+        groups = []
+        for name, rows in buckets.items():
+            total = sum(r.get("n", 0) for r in rows) or len(rows)
+            groups.append({
+                "industry": name,
+                "hits": int(total),
+                "count": len(rows),
+                "items": rows,
+            })
+        groups.sort(key=lambda g: (-g["hits"], -g["count"]))
+        return groups
+
+    universe_size = len(cols)
     big = [t for t in cols if (info[t].get("mcap") or 0) > 10e9 and not pd.isna(pct.get(t))]
     gainers = sorted(big, key=lambda t: -pct[t])[:25]
     losers = sorted(big, key=lambda t: pct[t])[:25]
     return {
-        "highs": highs[:150], "lows": lows[:150],
-        "gainers": [row(t) for t in gainers], "losers": [row(t) for t in losers],
+        "summary": {
+            "universe": universe_size,
+            "highs_count": len(highs),
+            "lows_count": len(lows),
+            "highs_pct": rnd(100 * len(highs) / universe_size) if universe_size else 0,
+            "lows_pct": rnd(100 * len(lows) / universe_size) if universe_size else 0,
+            "lookback_days": lookback,
+        },
+        "highs": highs[:150],
+        "lows": lows[:150],
+        "highs_grouped": group_by_industry(highs),
+        "lows_grouped": group_by_industry(lows),
+        "gainers": [row(t) for t in gainers],
+        "losers": [row(t) for t in losers],
     }
 
 

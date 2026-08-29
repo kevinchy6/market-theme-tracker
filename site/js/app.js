@@ -236,22 +236,91 @@ function toggleDrill(tr, themes) {
 }
 
 /* ---------------- spotlight ---------------- */
+let _spotSide = 'highs'; // 'highs' | 'lows'
 async function renderSpotlight() {
   const s = await getJSON('spotlight.json');
-  const list = (rows, cols = ['chg']) => rows.map((r) =>
+  const sum = s.summary || {
+    universe: (s.highs.length + s.lows.length) || 1,
+    highs_count: s.highs.length, lows_count: s.lows.length,
+    highs_pct: 0, lows_pct: 0, lookback_days: 63,
+  };
+  const totalHL = sum.highs_count + sum.lows_count;
+  // Share of the H/L pool that each side represents (matches Market Pulse's
+  // green/red bar which fills based on the H vs L balance today).
+  const hShare = totalHL ? (100 * sum.highs_count / totalHL) : 50;
+  const lShare = totalHL ? 100 - hShare : 50;
+
+  const chip = (r) => {
+    const n = r.n ?? '';
+    return `<span class="hl-chip" data-ticker="${esc(r.t)}" title="${esc(r.name)} · ${fmtPct(r.chg)}">` +
+      `<span class="hl-t">${esc(r.t)}</span>` +
+      (n !== '' ? `<span class="hl-n">${n}</span>` : '') +
+      `</span>`;
+  };
+
+  const groupCard = (g) => `
+    <div class="hl-group">
+      <div class="hl-group-head">
+        <span class="hl-group-name">${esc(g.industry)}</span>
+        <span class="hl-group-hits">${g.hits} hits · ${g.count} names</span>
+      </div>
+      <div class="hl-chips">${g.items.map(chip).join('')}</div>
+    </div>`;
+
+  const side = _spotSide;
+  const groups = (side === 'highs' ? s.highs_grouped : s.lows_grouped) || [];
+  const groupsHTML = groups.length
+    ? groups.map(groupCard).join('')
+    : '<div class="empty">none today</div>';
+
+  const moverList = (rows) => rows.map((r) =>
     `<tr><td><span class="tick-link" data-ticker="${esc(r.t)}">${esc(r.t)}</span><span class="secname">${esc(r.name)}</span></td>` +
     `<td>${r.px ?? '—'}</td><td>${fmtPct(r.chg)}</td><td style="text-align:left" class="dim">${esc(r.ind)}</td></tr>`).join('');
-  const block = (title, rows, meta) => `
-    <div class="card"><div class="card-head"><h2>${title}</h2><span class="meta">${meta}</span></div>
+  const moverBlock = (title, rows) => `
+    <div class="card"><div class="card-head"><h2>${title}</h2></div>
     <div class="tbl-wrap" style="max-height:48vh"><table>
     <thead><tr><th>Ticker</th><th>Price</th><th>Chg</th><th style="text-align:left">Industry</th></tr></thead>
     <tbody>${rows.length ? rows : ''}</tbody></table>${rows.length ? '' : '<div class="empty">none today</div>'}</div></div>`;
-  main.innerHTML = `<div class="grid-2">
-    ${block('New 52-Week Highs', list(s.highs), s.highs.length + ' stocks')}
-    ${block('New 52-Week Lows', list(s.lows), s.lows.length + ' stocks')}
-    ${block('Top Gainers (>$10B)', list(s.gainers), '')}
-    ${block('Top Losers (>$10B)', list(s.losers), '')}
-  </div>`;
+
+  main.innerHTML = `
+    <div class="card hl-summary-card">
+      <div class="hl-summary">
+        <div class="hl-summary-nums">
+          <span class="pos">New Highs ${sum.highs_pct}%</span>
+          <span class="dim">(${sum.highs_count})</span>
+          <span class="neg" style="margin-left:18px">New Lows ${sum.lows_pct}%</span>
+          <span class="dim">(${sum.lows_count})</span>
+          <span class="dim" style="margin-left:18px;font-size:12px">of ${sum.universe} · past ${sum.lookback_days}d</span>
+        </div>
+        <div class="hl-bar">
+          <div class="hl-bar-h" style="width:${hShare}%"></div>
+          <div class="hl-bar-l" style="width:${lShare}%"></div>
+        </div>
+        <div class="hl-tabs">
+          <button class="hl-tab ${side === 'highs' ? 'active' : ''}" data-side="highs">Highs (${sum.highs_count})</button>
+          <button class="hl-tab ${side === 'lows' ? 'active' : ''}" data-side="lows">Lows (${sum.lows_count})</button>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-head">
+      <h2>${side === 'highs' ? 'New 52-Week Highs by Industry' : 'New 52-Week Lows by Industry'}</h2>
+      <span class="meta">${groups.length} groups · number after ticker = days on list in past ${sum.lookback_days} sessions</span>
+    </div>${groupsHTML}</div>
+    <div class="grid-2" style="margin-top:16px">
+      ${moverBlock('Top Gainers (>$10B)', moverList(s.gainers))}
+      ${moverBlock('Top Losers (>$10B)', moverList(s.losers))}
+    </div>`;
+
+  main.querySelectorAll('.hl-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      _spotSide = btn.dataset.side;
+      renderSpotlight();
+    });
+  });
+  main.querySelectorAll('.hl-chip').forEach((el) => {
+    el.addEventListener('click', () => openTicker(el.dataset.ticker));
+    el.style.cursor = 'pointer';
+  });
   bindTickerLinks(main);
 }
 
