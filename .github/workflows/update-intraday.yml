@@ -4,9 +4,11 @@ on:
   schedule:
     # GitHub free-tier scheduled runs get heavily delayed / dropped
     # (up to 60+ min under high load, often skipped entirely). Fire
-    # every 15 min during the US session to guarantee at least one
-    # run per hour lands. The concurrency group below prevents overlap.
-    - cron: "*/15 13-21 * * 1-5"
+    # every 15 min from 1h before the US open through the close to
+    # guarantee at least one run per hour lands. Hour 12 UTC covers
+    # the pre-open hour in summer (open 13:30 UTC); in winter the
+    # open moves to 14:30 UTC so the window is still covered.
+    - cron: "*/15 12-21 * * 1-5"
   workflow_dispatch:
 
 permissions:
