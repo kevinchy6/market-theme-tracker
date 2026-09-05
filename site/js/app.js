@@ -6,6 +6,8 @@ const cache = {};
 let currentView = 'themes';
 let themeTab = 'industry';
 let sortKey = 'd1';
+// hide 1-2 stock sub-industries by default: a single name's move is not a theme
+let minNames = (() => { try { return localStorage.getItem('tp_minNames') !== '0'; } catch (e) { return true; } })();
 let sortDir = -1;
 let scannerDir = 'all';
 let earnWeekOffset = 0;
@@ -147,7 +149,8 @@ async function renderThemes() {
     <div class="pills" id="theme-pills">${pills}</div>
     ${gainers}
     <div class="card">
-      <div class="card-head"><h2 id="tbl-title"></h2><span class="meta" id="tbl-meta"></span></div>
+      <div class="card-head"><h2 id="tbl-title"></h2>
+        <span class="card-tools"><label class="toggle" id="min-names-wrap" title="Hide sub-industries with fewer than 3 constituents"><input type="checkbox" id="min-names"> 3+ names</label><span class="meta" id="tbl-meta"></span></span></div>
       <div class="tbl-wrap"><table id="main-tbl"></table></div>
     </div>
     <p class="note">Group returns are equal-weight averages of constituents (S&P 1500 universe, Yahoo Finance industry classification). Click a group to see its stocks; click a ticker for a full workup.</p>`;
@@ -162,8 +165,20 @@ async function renderThemes() {
 function drawThemesTable(themes, etfs) {
   const isGroup = themeTab === 'industry' || themeTab === 'sector';
   let rows, title;
+  const wrap = $('#min-names-wrap');
+  if (wrap) {
+    wrap.style.display = themeTab === 'industry' ? '' : 'none';
+    const cb = $('#min-names');
+    cb.checked = minNames;
+    cb.onchange = () => {
+      minNames = cb.checked;
+      try { localStorage.setItem('tp_minNames', minNames ? '1' : '0'); } catch (e) { /* sandboxed */ }
+      drawThemesTable(themes, etfs);
+    };
+  }
   if (isGroup) {
     rows = themes[themeTab].slice();
+    if (themeTab === 'industry' && minNames) rows = rows.filter((r) => (r.n || 0) >= 3);
     title = themeTab === 'industry' ? `Sub-Industry Themes` : 'Yahoo Finance Sectors';
   } else {
     rows = (etfs ? etfs[themeTab] : []).slice();
@@ -177,7 +192,8 @@ function drawThemesTable(themes, etfs) {
   });
 
   $('#tbl-title').textContent = title;
-  $('#tbl-meta').textContent = `${rows.length} ${isGroup ? 'groups' : 'funds'}`;
+  const hidden = (themeTab === 'industry' && minNames) ? themes.industry.length - rows.length : 0;
+  $('#tbl-meta').textContent = `${rows.length} ${isGroup ? 'groups' : 'funds'}${hidden ? ` · ${hidden} thin groups hidden` : ''}`;
 
   const head = `<thead><tr><th data-k="g">${isGroup ? 'Group' : 'Fund'}</th>` +
     TF_COLS.map(([k, label]) =>

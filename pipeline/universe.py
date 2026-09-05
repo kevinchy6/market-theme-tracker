@@ -81,7 +81,10 @@ def load_json(path, default):
 
 def fetch_yahoo_classification(tickers, ymap, max_workers=8, limit=None):
     """Fetch sector/industry from Yahoo for tickers missing from cache."""
-    missing = [t for t in tickers if t not in ymap]
+    # re-fetch entries whose market cap never resolved (Yahoo .info is flaky
+    # for some large caps like CRM/AZO/BBY); keep their classification if
+    # the retry fails again.
+    missing = [t for t in tickers if t not in ymap or not ymap[t].get("mcap")]
     if limit:
         missing = missing[:limit]
     if not missing:
@@ -89,12 +92,25 @@ def fetch_yahoo_classification(tickers, ymap, max_workers=8, limit=None):
 
     def one(t):
         try:
-            info = yf.Ticker(t).info
+            tk = yf.Ticker(t)
+            info = tk.info
+            mcap = info.get("marketCap") or 0
+            if not mcap:
+                try:
+                    mcap = int(tk.fast_info["marketCap"] or 0)
+                except Exception:  # noqa: BLE001
+                    mcap = 0
+            if not mcap:
+                shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+                px = info.get("regularMarketPrice") or info.get("previousClose")
+                if shares and px:
+                    mcap = int(shares * px)
+            prev = ymap.get(t, {})
             return t, {
-                "sector": info.get("sector") or "",
-                "industry": info.get("industry") or "",
-                "name": info.get("shortName") or info.get("longName") or "",
-                "mcap": info.get("marketCap") or 0,
+                "sector": info.get("sector") or prev.get("sector") or "",
+                "industry": info.get("industry") or prev.get("industry") or "",
+                "name": info.get("shortName") or info.get("longName") or prev.get("name") or "",
+                "mcap": mcap or prev.get("mcap") or 0,
             }
         except Exception as e:  # noqa: BLE001
             return t, {"error": str(e)[:120]}
