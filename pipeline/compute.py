@@ -151,8 +151,13 @@ def breadth_history(universe, close, volume, days=252):
     """Daily breadth indicators computed over the trailing `days` sessions."""
     info = {u["t"]: u for u in universe}
     cols = [t for t in close.columns if t in info]
-    c = close[cols].ffill()
-    pct = c.pct_change() * 100
+    raw = close[cols]
+    # adv/dec/up4/dn4 must use RAW close: ffill turns a missing bar
+    # into pct=0 and eventually a synthetic big move when data returns,
+    # inflating the up ratio by ~5pp. MA / 52w / momentum indicators can
+    # tolerate ffill because they smooth over the gap.
+    pct = raw.pct_change() * 100
+    c = raw.ffill()
 
     ma20 = c.rolling(20).mean()
     ma50 = c.rolling(50).mean()
@@ -167,8 +172,11 @@ def breadth_history(universe, close, volume, days=252):
     dn4 = (pct <= -4).sum(axis=1)
     adv = (pct > 0).sum(axis=1)
     dec = (pct < 0).sum(axis=1)
-    nh = (c >= hi52).sum(axis=1)
-    nl = (c <= lo52).sum(axis=1)
+    # New-high/low counts must exclude tickers with no fresh print that day
+    # (otherwise ffill-carried old prices at a 52w high get miscounted).
+    fresh = raw.notna()
+    nh = ((c >= hi52) & fresh).sum(axis=1)
+    nl = ((c <= lo52) & fresh).sum(axis=1)
     above20 = (c > ma20).sum(axis=1) / len(cols) * 100
     above50 = (c > ma50).sum(axis=1) / len(cols) * 100
     above200 = (c > ma200).sum(axis=1) / len(cols) * 100
