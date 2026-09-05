@@ -79,12 +79,20 @@ def load_json(path, default):
     return default
 
 
+# Yahoo exchange code -> TradingView exchange prefix
+TV_EXCHANGE = {
+    "NMS": "NASDAQ", "NGM": "NASDAQ", "NCM": "NASDAQ", "NAS": "NASDAQ",
+    "NYQ": "NYSE", "NYS": "NYSE",
+    "ASE": "AMEX", "PCX": "AMEX", "BTS": "AMEX", "BATS": "AMEX", "CBT": "CBOE",
+}
+
+
 def fetch_yahoo_classification(tickers, ymap, max_workers=8, limit=None):
     """Fetch sector/industry from Yahoo for tickers missing from cache."""
     # re-fetch entries whose market cap never resolved (Yahoo .info is flaky
     # for some large caps like CRM/AZO/BBY); keep their classification if
     # the retry fails again.
-    missing = [t for t in tickers if t not in ymap or not ymap[t].get("mcap")]
+    missing = [t for t in tickers if t not in ymap or not ymap[t].get("mcap") or not ymap[t].get("ex")]
     if limit:
         missing = missing[:limit]
     if not missing:
@@ -106,7 +114,9 @@ def fetch_yahoo_classification(tickers, ymap, max_workers=8, limit=None):
                 if shares and px:
                     mcap = int(shares * px)
             prev = ymap.get(t, {})
+            ex = TV_EXCHANGE.get(info.get("exchange") or "", "") or prev.get("ex", "")
             return t, {
+                "ex": ex,
                 "sector": info.get("sector") or prev.get("sector") or "",
                 "industry": info.get("industry") or prev.get("industry") or "",
                 "name": info.get("shortName") or info.get("longName") or prev.get("name") or "",
@@ -155,6 +165,7 @@ def main():
                 "sector": y.get("sector") or m["gics_sector"],
                 "industry": y.get("industry") or m["gics_sub"],
                 "mcap": y.get("mcap", 0),
+                "ex": y.get("ex", ""),
                 "cap_bucket": m["cap_bucket"],
             }
         )

@@ -240,7 +240,7 @@ def gap_scanner(universe, opn, close, volume):
                 "t": t, "name": info[t]["name"][:32], "px": rnd(px),
                 "gap": rnd(g), "chg": rnd(ch),
                 "vol": int(v.get(t) or 0), "rvol": rnd(rvol.get(t)),
-                "ind": info[t].get("industry", ""),
+                "ind": info[t].get("industry", ""), "ex": info[t].get("ex", ""),
             }
         )
     rows.sort(key=lambda r: -abs(r["gap"]))
@@ -270,6 +270,7 @@ def spotlight(universe, close, volume):
         r = {
             "t": t, "name": info[t]["name"][:32], "px": rnd(last[t]),
             "chg": rnd(pct.get(t)), "ind": info[t].get("industry", ""),
+            "ex": info[t].get("ex", ""),
             "mcap": info[t].get("mcap") or 0,
         }
         if count is not None:

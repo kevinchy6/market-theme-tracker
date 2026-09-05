@@ -418,3 +418,12 @@ footer a { color: var(--text-dim); }
 .card-tools { display: flex; align-items: center; gap: 12px; }
 .toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted, #9aa3b2); cursor: pointer; user-select: none; }
 .toggle input { accent-color: var(--accent, #f0a629); width: 13px; height: 13px; margin: 0; }
+
+/* copy-for-TradingView button */
+.btn-copy { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--accent, #f0a629); background: transparent; border: 1px solid var(--accent, #f0a629); border-radius: 6px; cursor: pointer;
+  transition: background .15s, color .15s; white-space: nowrap; }
+.btn-copy:hover { background: var(--accent, #f0a629); color: #111; }
+.btn-copy.copied { background: var(--pos, #22c55e); border-color: var(--pos, #22c55e); color: #111; }
+.btn-copy.copy-failed { background: var(--neg, #ef4444); border-color: var(--neg, #ef4444); color: #fff; }
+@media (max-width: 640px) { .card-head { flex-wrap: wrap; gap: 8px; } }

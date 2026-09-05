@@ -384,6 +384,43 @@ async function renderBreadth() {
 }
 
 /* ---------------- scanner ---------------- */
+/* TradingView watchlist format: "NYSE:MPC,NASDAQ:AAPL" (comma-separated,
+   exchange prefix when known, Yahoo's BRK-B -> TradingView's BRK.B). Paste
+   the string into a TradingView watchlist's "add symbol" box. */
+function tvSymbol(r) {
+  const t = String(r.t || '').replace('-', '.');
+  return r.ex ? `${r.ex}:${t}` : t;
+}
+function tvList(rows) { return rows.map(tvSymbol).join(','); }
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    // fallback for sandboxed / non-secure contexts
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+function bindCopyButton(btn, getRows, label) {
+  btn.onclick = async () => {
+    const rows = getRows();
+    if (!rows.length) return;
+    const ok = await copyText(tvList(rows));
+    const orig = btn.innerHTML;
+    btn.classList.add(ok ? 'copied' : 'copy-failed');
+    btn.innerHTML = ok ? `✓ Copied ${rows.length} ${label}` : 'Copy failed — select manually';
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied', 'copy-failed'); }, 2200);
+  };
+}
+
 async function renderScanner() {
   const s = await getJSON('scanner.json');
   let rows = s.rows;
@@ -399,12 +436,19 @@ async function renderScanner() {
       <button class="pill ${scannerDir === 'up' ? 'active' : ''}" data-d="up">Gap Up</button>
       <button class="pill ${scannerDir === 'down' ? 'active' : ''}" data-d="down">Gap Down</button>
     </div>
-    <div class="card"><div class="card-head"><h2>Gap Scanner</h2><span class="meta">${rows.length} names · price &gt; $5 · avg vol &gt; 300K</span></div>
+    <div class="card"><div class="card-head"><h2>Gap Scanner</h2>
+      <span class="card-tools">
+        <button class="btn-copy" id="copy-tv" title="Copy the ${rows.length} tickers below as a TradingView watchlist (NYSE:XXX,NASDAQ:YYY). Paste into a TradingView watchlist.">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy for TradingView</button>
+        <span class="meta">${rows.length} names · price &gt; $5 · avg vol &gt; 300K</span>
+      </span></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Ticker</th><th>Price</th><th>Gap %</th><th>Chg %</th><th>Volume</th><th>RVOL</th><th style="text-align:left">Industry</th></tr></thead>
       <tbody>${body}</tbody></table>${rows.length ? '' : '<div class="empty">no qualifying gaps</div>'}</div></div>
     <p class="note">Gap = last session open vs prior close. Data refreshes on the GitHub Actions schedule (delayed, not tick-level). RVOL = last volume ÷ 20-day average.</p>`;
   $$('.pills .pill', main).forEach((p) => { p.onclick = () => { scannerDir = p.dataset.d; renderScanner(); }; });
+  bindCopyButton($('#copy-tv'), () => rows, scannerDir === 'up' ? 'gap-ups' : scannerDir === 'down' ? 'gap-downs' : 'tickers');
   bindTickerLinks(main);
 }
 
