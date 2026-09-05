@@ -410,3 +410,6 @@ footer a { color: var(--text-dim); }
 }
 .hl-chip .hl-t { color: var(--text); font-weight: 600; font-family: var(--font-mono); letter-spacing: .3px; }
 .hl-chip .hl-n { color: var(--text-faint); font-size: 11px; font-family: var(--font-mono); }
+
+/* stale data warning */
+.stale-warn { color: var(--amber, #e6a23c); font-weight: 600; cursor: help; }

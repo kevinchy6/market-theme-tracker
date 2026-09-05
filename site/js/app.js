@@ -74,6 +74,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
       return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} HKT`;
     })();
     $('#updated').textContent = `updated ${hkUpdated} · bar ${meta.last_bar}`;
+    if (meta.stale) {
+      $('#updated').innerHTML += ` <span class="stale-warn" title="Latest session (${meta.expected_bar}) not yet in the data — an update should land shortly.">⚠ data behind</span>`;
+    }
     renderTape(tape);
   } catch (e) { /* first run before data exists */ }
   render();

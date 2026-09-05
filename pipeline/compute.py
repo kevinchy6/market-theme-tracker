@@ -408,9 +408,18 @@ def main():
     print(f"wrote {n} ticker files")
 
     last_bar = close.index[-1]
+    # freshness check: what session should we have by now?
+    now_et = pd.Timestamp.now(tz="America/New_York")
+    expected = now_et.normalize().tz_localize(None)
+    if now_et.hour < 10:  # before ~open, previous session is fine
+        expected -= pd.Timedelta(days=1)
+    while expected.weekday() >= 5:
+        expected -= pd.Timedelta(days=1)
     save("meta.json", {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "last_bar": last_bar.strftime("%Y-%m-%d"),
+        "expected_bar": expected.strftime("%Y-%m-%d"),
+        "stale": bool(last_bar.normalize() < expected),
         "universe": len(universe),
         "industries": len(groups["industry"]),
     })

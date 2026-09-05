@@ -71,8 +71,38 @@ def download_all(tickers, period=HISTORY_PERIOD, chunk=50, rounds=5, pause=2.0, 
         raise RuntimeError("no price data downloaded")
     out = pd.concat(frames, axis=1)  # columns: (ticker, field)
     out = out.swaplevel(axis=1).sort_index(axis=1)  # -> (field, ticker)
+    out = sanitize_dates(out)
     print(f"  total tickers with data: {len(frames)}")
     return out
+
+
+def sanitize_dates(df):
+    """Fix Yahoo's phantom-date quirk: after the US close (~20:00-24:00 ET,
+    i.e. 00:00-04:00 UTC next day) the live row for the just-finished session
+    is sometimes stamped with the *current UTC date* (e.g. Friday's close
+    arrives labelled Saturday 00:00). Any bar dated after 'today in
+    America/New_York' is relabelled to the last US business day; duplicates keep
+    the row with better coverage."""
+    df = df.copy()
+    df.index = pd.to_datetime(df.index).normalize()
+    et_today = pd.Timestamp.now(tz="America/New_York").normalize().tz_localize(None)
+    bad = df.index > et_today
+    if bad.any():
+        # last completed/ongoing US session = et_today rolled back to weekday
+        expected = et_today
+        while expected.weekday() >= 5:
+            expected -= pd.Timedelta(days=1)
+        print(f"  relabelling {int(bad.sum())} future-dated bar(s) -> {expected.date()}")
+        idx = df.index.to_series()
+        idx[bad] = expected
+        df.index = pd.DatetimeIndex(idx)
+    if df.index.duplicated().any():
+        # keep the row with the most non-NaN closes per duplicate date
+        cov = df["Close"].notna().sum(axis=1).to_numpy()
+        order = pd.DataFrame({"d": df.index, "c": cov, "i": range(len(df))})
+        keep = order.sort_values(["d", "c", "i"]).groupby("d").tail(1)["i"].to_numpy()
+        df = df.iloc[sorted(keep)]
+    return df.sort_index()
 
 
 def main(mode="auto"):
@@ -101,7 +131,7 @@ def main(mode="auto"):
         else:
             cutoff = new.index.min()
             merged = pd.concat([old[old.index < cutoff], new])
-            df = merged.sort_index()
+            df = sanitize_dates(merged)
     else:
         print(f"full download ({len(tickers)} tickers, {HISTORY_PERIOD} daily)")
         df = download_all(tickers)
