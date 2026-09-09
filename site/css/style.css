@@ -427,3 +427,9 @@ footer a { color: var(--text-dim); }
 .btn-copy.copied { background: var(--pos, #22c55e); border-color: var(--pos, #22c55e); color: #111; }
 .btn-copy.copy-failed { background: var(--neg, #ef4444); border-color: var(--neg, #ef4444); color: #fff; }
 @media (max-width: 640px) { .card-head { flex-wrap: wrap; gap: 8px; } }
+
+/* H&L window picker: subtle chip with count badge */
+.hl-win-pills { margin-bottom: 10px; }
+.hl-win-pills .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; }
+.hl-win-pills .pill .pill-n { padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 10px; font-weight: 600; color: var(--dim, #888); }
+.hl-win-pills .pill.active .pill-n { background: rgba(0,0,0,.25); color: inherit; }

@@ -256,12 +256,24 @@ function toggleDrill(tr, themes) {
 
 /* ---------------- spotlight ---------------- */
 let _spotSide = 'highs'; // 'highs' | 'lows'
+let _spotWin = localStorage.getItem('tp_hlWin') || 'y1'; // 'm1' | 'm3' | 'm6' | 'y1'
+const _WIN_LABEL = { m1: '1 month (20d)', m3: '3 months (63d)', m6: '6 months (126d)', y1: '1 year (252d)' };
 async function renderSpotlight() {
   const s = await getJSON('spotlight.json');
-  const sum = s.summary || {
-    universe: (s.highs.length + s.lows.length) || 1,
+  const windows = s.windows || {};
+  if (!windows[_spotWin]) _spotWin = 'y1';
+  const w = windows[_spotWin] || {
+    highs: s.highs, lows: s.lows,
+    highs_grouped: s.highs_grouped, lows_grouped: s.lows_grouped,
     highs_count: s.highs.length, lows_count: s.lows.length,
-    highs_pct: 0, lows_pct: 0, lookback_days: 63,
+    highs_pct: 0, lows_pct: 0,
+    lookback_days: (s.summary || {}).lookback_days || 63,
+  };
+  const sum = {
+    universe: (s.summary || {}).universe || (w.highs_count + w.lows_count) || 1,
+    highs_count: w.highs_count, lows_count: w.lows_count,
+    highs_pct: w.highs_pct, lows_pct: w.lows_pct,
+    lookback_days: w.lookback_days,
   };
   const totalHL = sum.highs_count + sum.lows_count;
   // Share of the H/L pool that each side represents (matches Market Pulse's
@@ -290,10 +302,17 @@ async function renderSpotlight() {
     </div>`;
 
   const side = _spotSide;
-  const groups = (side === 'highs' ? s.highs_grouped : s.lows_grouped) || [];
+  const groups = (side === 'highs' ? w.highs_grouped : w.lows_grouped) || [];
+  const rows = (side === 'highs' ? w.highs : w.lows) || [];
   const groupsHTML = groups.length
     ? groups.map(groupCard).join('')
-    : '<div class="empty">none today</div>';
+    : '<div class="empty">none in this window</div>';
+  const winPicker = ['m1', 'm3', 'm6', 'y1'].map((k) => {
+    const wx = windows[k];
+    const label = { m1: '1M', m3: '3M', m6: '6M', y1: '1Y' }[k];
+    const cnt = wx ? (side === 'highs' ? wx.highs_count : wx.lows_count) : 0;
+    return `<button class="pill ${_spotWin === k ? 'active' : ''}" data-win="${k}" title="${esc(_WIN_LABEL[k])} — ${cnt} ${side}">${label}<span class="pill-n">${cnt}</span></button>`;
+  }).join('');
 
   const moverList = (rows) => rows.map((r) =>
     `<tr><td><span class="tick-link" data-ticker="${esc(r.t)}">${esc(r.t)}</span><span class="secname">${esc(r.name)}</span></td>` +
@@ -304,6 +323,7 @@ async function renderSpotlight() {
     <thead><tr><th>Ticker</th><th>Price</th><th>Chg</th><th style="text-align:left">Industry</th></tr></thead>
     <tbody>${rows.length ? rows : ''}</tbody></table>${rows.length ? '' : '<div class="empty">none today</div>'}</div></div>`;
 
+  const titleLabel = { m1: '1-Month', m3: '3-Month', m6: '6-Month', y1: '52-Week' }[_spotWin];
   main.innerHTML = `
     <div class="card hl-summary-card">
       <div class="hl-summary">
@@ -312,7 +332,7 @@ async function renderSpotlight() {
           <span class="dim">(${sum.highs_count})</span>
           <span class="neg" style="margin-left:18px">New Lows ${sum.lows_pct}%</span>
           <span class="dim">(${sum.lows_count})</span>
-          <span class="dim" style="margin-left:18px;font-size:12px">of ${sum.universe} · past ${sum.lookback_days}d</span>
+          <span class="dim" style="margin-left:18px;font-size:12px">of ${sum.universe} · window: ${sum.lookback_days}d</span>
         </div>
         <div class="hl-bar">
           <div class="hl-bar-h" style="width:${hShare}%"></div>
@@ -324,9 +344,15 @@ async function renderSpotlight() {
         </div>
       </div>
     </div>
+    <div class="pills hl-win-pills">${winPicker}</div>
     <div class="card"><div class="card-head">
-      <h2>${side === 'highs' ? 'New 52-Week Highs by Industry' : 'New 52-Week Lows by Industry'}</h2>
-      <span class="meta">${groups.length} groups · number after ticker = days on list in past ${sum.lookback_days} sessions</span>
+      <h2>${side === 'highs' ? `New ${titleLabel} Highs by Industry` : `New ${titleLabel} Lows by Industry`}</h2>
+      <span class="card-tools">
+        <button class="btn-copy" id="copy-hl" title="Copy the ${rows.length} tickers as a TradingView watchlist. Paste into a TradingView watchlist.">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy for TradingView</button>
+        <span class="meta">${groups.length} groups · number after ticker = days on list in past ${sum.lookback_days} sessions</span>
+      </span>
     </div>${groupsHTML}</div>
     <div class="grid-2" style="margin-top:16px">
       ${moverBlock('Top Gainers (>$10B)', moverList(s.gainers))}
@@ -339,6 +365,15 @@ async function renderSpotlight() {
       renderSpotlight();
     });
   });
+  main.querySelectorAll('.hl-win-pills .pill').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      _spotWin = btn.dataset.win;
+      localStorage.setItem('tp_hlWin', _spotWin);
+      renderSpotlight();
+    });
+  });
+  const copyBtn = $('#copy-hl');
+  if (copyBtn) bindCopyButton(copyBtn, () => rows, side === 'highs' ? `${titleLabel} highs` : `${titleLabel} lows`);
   main.querySelectorAll('.hl-chip').forEach((el) => {
     el.addEventListener('click', () => openTicker(el.dataset.ticker));
     el.style.cursor = 'pointer';

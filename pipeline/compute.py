@@ -252,19 +252,14 @@ def spotlight(universe, close, volume):
     cols = [t for t in close.columns if t in info]
     c = close[cols].ffill()
     pct = (c.iloc[-1] / c.iloc[-2] - 1) * 100
-    roll_hi = c.rolling(252, min_periods=60).max()
-    roll_lo = c.rolling(252, min_periods=60).min()
-    hi52 = roll_hi.iloc[-1]
-    lo52 = roll_lo.iloc[-1]
     last = c.iloc[-1]
 
-    # "Hit count" over the last 63 sessions (~3 months): how many days the
-    # stock closed at a new 52w high / low within that window. Matches the
-    # persistence metric on Market Pulse's Highs/Lows page.
-    lookback = min(63, len(c))
-    window = c.tail(lookback)
-    hi_hits = (window >= roll_hi.tail(lookback)).sum(axis=0).astype(int)
-    lo_hits = (window <= roll_lo.tail(lookback)).sum(axis=0).astype(int)
+    # Multiple lookback windows so the UI can toggle 20d / 3m / 6m / 1y.
+    # For each window: a stock is a "new high" today iff its last close equals
+    # the max close over the trailing N sessions (inclusive). "hits" = how
+    # many sessions inside that window it closed at the running window max —
+    # a persistence metric similar to the tick counters on Market Pulse.
+    WINDOWS = {"m1": 20, "m3": 63, "m6": 126, "y1": 252}
 
     def row(t, count=None):
         r = {
@@ -277,22 +272,7 @@ def spotlight(universe, close, volume):
             r["n"] = int(count)
         return r
 
-    highs = [
-        row(t, hi_hits.get(t, 0)) for t in cols
-        if last[t] >= hi52[t] and not pd.isna(pct.get(t))
-    ]
-    lows = [
-        row(t, lo_hits.get(t, 0)) for t in cols
-        if last[t] <= lo52[t] and not pd.isna(pct.get(t))
-    ]
-    # Sort each list by hit count desc (most persistent first),
-    # then by chg for tie-breaking.
-    highs.sort(key=lambda r: (-r.get("n", 0), -(r["chg"] or 0)))
-    lows.sort(key=lambda r: (-r.get("n", 0), r["chg"] or 0))
-
     def group_by_industry(items):
-        """Return list of {industry, total_hits, items} sorted by total hits desc.
-        Items missing an industry go into an 'Ungrouped' bucket."""
         buckets = {}
         for r in items:
             key = r.get("ind") or "Ungrouped"
@@ -309,6 +289,41 @@ def spotlight(universe, close, volume):
         groups.sort(key=lambda g: (-g["hits"], -g["count"]))
         return groups
 
+    windows_out = {}
+    for key, wks in WINDOWS.items():
+        lookback = min(wks, len(c))
+        window = c.tail(lookback)
+        roll_hi = c.rolling(lookback, min_periods=max(5, lookback // 4)).max()
+        roll_lo = c.rolling(lookback, min_periods=max(5, lookback // 4)).min()
+        w_hi = roll_hi.iloc[-1]
+        w_lo = roll_lo.iloc[-1]
+        hi_hits = (window >= roll_hi.tail(lookback)).sum(axis=0).astype(int)
+        lo_hits = (window <= roll_lo.tail(lookback)).sum(axis=0).astype(int)
+        highs = [
+            row(t, hi_hits.get(t, 0)) for t in cols
+            if last[t] >= w_hi[t] and not pd.isna(pct.get(t))
+        ]
+        lows = [
+            row(t, lo_hits.get(t, 0)) for t in cols
+            if last[t] <= w_lo[t] and not pd.isna(pct.get(t))
+        ]
+        highs.sort(key=lambda r: (-r.get("n", 0), -(r["chg"] or 0)))
+        lows.sort(key=lambda r: (-r.get("n", 0), r["chg"] or 0))
+        windows_out[key] = {
+            "lookback_days": lookback,
+            "highs_count": len(highs), "lows_count": len(lows),
+            "highs_pct": rnd(100 * len(highs) / len(cols)) if cols else 0,
+            "lows_pct": rnd(100 * len(lows) / len(cols)) if cols else 0,
+            "highs": highs[:250], "lows": lows[:250],
+            "highs_grouped": group_by_industry(highs),
+            "lows_grouped": group_by_industry(lows),
+        }
+
+    # Back-compat: top-level fields = 1-year window (what the UI previously showed).
+    default = windows_out["y1"]
+    highs = default["highs"]
+    lows = default["lows"]
+
     universe_size = len(cols)
     big = [t for t in cols if (info[t].get("mcap") or 0) > 10e9 and not pd.isna(pct.get(t))]
     gainers = sorted(big, key=lambda t: -pct[t])[:25]
@@ -320,12 +335,13 @@ def spotlight(universe, close, volume):
             "lows_count": len(lows),
             "highs_pct": rnd(100 * len(highs) / universe_size) if universe_size else 0,
             "lows_pct": rnd(100 * len(lows) / universe_size) if universe_size else 0,
-            "lookback_days": lookback,
+            "lookback_days": default["lookback_days"],
         },
-        "highs": highs[:150],
-        "lows": lows[:150],
-        "highs_grouped": group_by_industry(highs),
-        "lows_grouped": group_by_industry(lows),
+        "windows": windows_out,
+        "highs": highs,
+        "lows": lows,
+        "highs_grouped": default["highs_grouped"],
+        "lows_grouped": default["lows_grouped"],
         "gainers": [row(t) for t in gainers],
         "losers": [row(t) for t in losers],
     }
