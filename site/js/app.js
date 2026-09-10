@@ -387,9 +387,13 @@ async function renderBreadth() {
   const rows = b.rows.map((r) => {
     const heat = (v, hi, lo) => v >= hi ? 'heat h-strong' : v <= lo ? 'heat h-weak' : '';
     const ratioHeat = (v) => v >= 2 ? 'heat h-strong' : v <= 0.5 ? 'heat h-weak' : v < 1 ? 'heat h-warn' : '';
+    // % of issues that advanced (adv / (adv+dec)); unchanged excluded
+    const upPct = (x) => (x.adv + x.dec) > 0 ? 100 * x.adv / (x.adv + x.dec) : null;
+    const pctHeat = (v) => v == null ? '' : v >= 70 ? 'heat h-strong' : v <= 30 ? 'heat h-weak' : v < 50 ? 'neg' : 'pos';
     return `<tr>
       <td>${r.date}</td>
       <td class="${r.adv > r.dec ? 'pos' : 'neg'}">${r.adv}/${r.dec}</td>
+      <td class="${pctHeat(upPct(r))}">${upPct(r) == null ? '—' : upPct(r).toFixed(0) + '%'}</td>
       <td class="${heat(r.up4, 300, 0)}">${r.up4}</td>
       <td class="${r.dn4 >= 300 ? 'heat h-weak' : ''}">${r.dn4}</td>
       <td class="${ratioHeat(r.r5)}">${r.r5 ?? '—'}</td>
@@ -408,14 +412,14 @@ async function renderBreadth() {
     <div class="card-head"><h2>Market Breadth — S&P 1500 universe</h2><span class="meta">${b.universe_size} stocks · ${b.rows.length} sessions</span></div>
     <div class="tbl-wrap"><table>
       <thead><tr>
-        <th style="text-align:left">Date</th><th>Adv/Dec</th>
+        <th style="text-align:left">Date</th><th>Adv/Dec</th><th title="Advancers as % of Adv+Dec">% Up</th>
         <th>+4% Day</th><th>-4% Day</th><th>5D Ratio</th><th>10D Ratio</th>
         <th>+25% Qtr</th><th>-25% Qtr</th><th>+25% Mo</th><th>-25% Mo</th>
         <th>+13%/34D</th><th>-13%/34D</th>
         <th>52W NH</th><th>52W NL</th>
         <th>%&gt;20MA</th><th>%&gt;50MA</th><th>%&gt;200MA</th>
       </tr></thead><tbody>${rows}</tbody></table></div></div>
-    <p class="note">Computed from daily closes of the S&P 1500 universe. Ratio cells: green ≥ 2, amber &lt; 1, red ≤ 0.5. Percent-above-MA cells: green ≥ 70, red ≤ 30.</p>`;
+    <p class="note">Computed from daily closes of the S&P 1500 universe. % Up = Adv ÷ (Adv+Dec); green ≥ 70, red ≤ 30. Ratio cells: green ≥ 2, amber &lt; 1, red ≤ 0.5. Percent-above-MA cells: green ≥ 70, red ≤ 30.</p>`;
 }
 
 /* ---------------- scanner ---------------- */
