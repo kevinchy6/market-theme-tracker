@@ -97,12 +97,18 @@ def sanitize_dates(df):
         idx[bad] = expected
         df.index = pd.DatetimeIndex(idx)
     if df.index.duplicated().any():
-        # keep the row with the most non-NaN closes per duplicate date
-        cov = df["Close"].notna().sum(axis=1).to_numpy()
-        order = pd.DataFrame({"d": df.index, "c": cov, "i": range(len(df))})
-        keep = order.sort_values(["d", "c", "i"]).groupby("d").tail(1)["i"].to_numpy()
-        df = df.iloc[sorted(keep)]
+        # Merge duplicate dates instead of picking one row: after relabelling,
+        # some tickers may carry the session under the real date and others
+        # under the phantom date. Taking the first non-NaN per cell keeps both.
+        n_dup = int(df.index.duplicated().sum())
+        df = df.groupby(level=0).first()
+        print(f"  merged {n_dup} duplicate-date row(s)")
     return df.sort_index()
+
+
+def coverage_of_last_bar(df):
+    c = df["Close"]
+    return float(c.iloc[-1].notna().mean()) if len(c) else 0.0
 
 
 def main(mode="auto"):
@@ -121,17 +127,29 @@ def main(mode="auto"):
 
     if old is not None:
         print(f"incremental update ({len(tickers)} tickers, 7d)")
-        try:
-            new = download_all(
-                tickers, period="7d", chunk=50, rounds=4, pause=1.0, min_rows=1
-            )
-        except RuntimeError as e:
-            print(f"incremental failed ({e}); keeping existing prices unchanged")
-            df = old
-        else:
+        df = old
+        # Yahoo can lag after the close: the newest bar may arrive for only a
+        # handful of tickers on the first pass. Retry a few times until the
+        # newest bar covers most of the universe, otherwise keep what we have.
+        for attempt in range(3):
+            try:
+                new = download_all(
+                    tickers, period="7d", chunk=50, rounds=4, pause=1.0, min_rows=1
+                )
+            except RuntimeError as e:
+                print(f"incremental failed ({e}); keeping existing prices unchanged")
+                break
             cutoff = new.index.min()
-            merged = pd.concat([old[old.index < cutoff], new])
-            df = sanitize_dates(merged)
+            merged = sanitize_dates(pd.concat([old[old.index < cutoff], new]))
+            cov = coverage_of_last_bar(merged)
+            print(f"  attempt {attempt + 1}: last bar {merged.index[-1].date()} coverage {cov:.0%}")
+            if cov >= 0.5 or merged.index[-1] <= old.index[-1]:
+                df = merged
+                break
+            df = merged  # keep partial; compute filters thin rows itself
+            if attempt < 2:
+                print("  newest bar is thin; waiting 180s before retrying", flush=True)
+                time.sleep(180)
     else:
         print(f"full download ({len(tickers)} tickers, {HISTORY_PERIOD} daily)")
         df = download_all(tickers)
