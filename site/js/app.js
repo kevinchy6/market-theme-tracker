@@ -78,6 +78,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
     $('#updated').textContent = `updated ${hkUpdated} · bar ${meta.last_bar}`;
     if (meta.stale) {
       $('#updated').innerHTML += ` <span class="stale-warn" title="Latest session (${meta.expected_bar}) not yet in the data — an update should land shortly.">⚠ data behind</span>`;
+    } else if (meta.partial) {
+      const pct = Math.round((meta.coverage || 0) * 100);
+      $('#updated').innerHTML += ` <span class="stale-warn" title="Yahoo has published closes for only ${pct}% of the universe for ${meta.last_bar} so far. Adv/Dec, highs/lows and theme returns for this bar are understated until the next refresh.">⚠ partial ${pct}%</span>`;
     }
     renderTape(tape);
   } catch (e) { /* first run before data exists */ }

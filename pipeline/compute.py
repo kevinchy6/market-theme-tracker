@@ -440,11 +440,17 @@ def main():
         expected -= pd.Timedelta(days=1)
     while expected.weekday() >= 5:
         expected -= pd.Timedelta(days=1)
+    # share of universe tickers that have a close on the latest bar; Yahoo
+    # sometimes lags for a subset of names for a few hours after the close
+    uni_cols = [u["t"] for u in universe if u["t"] in close.columns]
+    coverage = float(close[uni_cols].iloc[-1].notna().mean()) if uni_cols else 1.0
     save("meta.json", {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "last_bar": last_bar.strftime("%Y-%m-%d"),
         "expected_bar": expected.strftime("%Y-%m-%d"),
         "stale": bool(last_bar.normalize() < expected),
+        "coverage": round(coverage, 3),
+        "partial": bool(coverage < 0.9),
         "universe": len(universe),
         "industries": len(groups["industry"]),
     })

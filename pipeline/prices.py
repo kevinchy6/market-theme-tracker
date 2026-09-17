@@ -143,7 +143,7 @@ def main(mode="auto"):
             merged = sanitize_dates(pd.concat([old[old.index < cutoff], new]))
             cov = coverage_of_last_bar(merged)
             print(f"  attempt {attempt + 1}: last bar {merged.index[-1].date()} coverage {cov:.0%}")
-            if cov >= 0.5 or merged.index[-1] <= old.index[-1]:
+            if cov >= 0.85 or merged.index[-1] <= old.index[-1]:
                 df = merged
                 break
             df = merged  # keep partial; compute filters thin rows itself
