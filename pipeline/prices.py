@@ -139,11 +139,17 @@ def main(mode="auto"):
             except RuntimeError as e:
                 print(f"incremental failed ({e}); keeping existing prices unchanged")
                 break
+            new = sanitize_dates(new)
             cutoff = new.index.min()
-            merged = sanitize_dates(pd.concat([old[old.index < cutoff], new]))
+            # Prefer fresh values, but never let an empty/partial Yahoo row wipe
+            # values we already hold for the same date (e.g. closes collected by
+            # the intraday runs when Yahoo's post-close daily bar is still NaN).
+            overlap = old[old.index >= cutoff]
+            merged = new.combine_first(overlap) if len(overlap) else new
+            merged = sanitize_dates(pd.concat([old[old.index < cutoff], merged]))
             cov = coverage_of_last_bar(merged)
             print(f"  attempt {attempt + 1}: last bar {merged.index[-1].date()} coverage {cov:.0%}")
-            if cov >= 0.85 or merged.index[-1] <= old.index[-1]:
+            if cov >= 0.85:
                 df = merged
                 break
             df = merged  # keep partial; compute filters thin rows itself
